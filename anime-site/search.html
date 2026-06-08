@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search — AniMain</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23f5c518'/><text x='50' y='72' font-size='60' text-anchor='middle' font-family='system-ui' font-weight='900' fill='black'>A</text></svg>">
+</head>
+<body>
+<div class="app">
+
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-brand-name">AniMain</div>
+      <div class="nav-brand-sub">v2.0 — Free Streaming</div>
+    </div>
+    <div class="nav-section-label">Menu</div>
+    <a href="index.html" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>Home</a>
+    <a href="search.html?filter=airing" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/></svg>Airing Now</a>
+    <a href="search.html?filter=top" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>Top Rated</a>
+    <a href="search.html?filter=popular" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Popular</a>
+    <a href="search.html?filter=upcoming" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Upcoming</a>
+    <div class="nav-section-label">Genres</div>
+    <div class="nav-genre-grid">
+      <div class="nav-genre" onclick="go('1','Action')">Action</div>
+      <div class="nav-genre" onclick="go('2','Adventure')">Adventure</div>
+      <div class="nav-genre" onclick="go('4','Comedy')">Comedy</div>
+      <div class="nav-genre" onclick="go('8','Drama')">Drama</div>
+      <div class="nav-genre" onclick="go('10','Fantasy')">Fantasy</div>
+      <div class="nav-genre" onclick="go('14','Horror')">Horror</div>
+      <div class="nav-genre" onclick="go('7','Mystery')">Mystery</div>
+      <div class="nav-genre" onclick="go('22','Romance')">Romance</div>
+      <div class="nav-genre" onclick="go('24','Sci-Fi')">Sci-Fi</div>
+      <div class="nav-genre" onclick="go('36','Slice of Life')">Slice of Life</div>
+      <div class="nav-genre" onclick="go('37','Supernatural')">Supernatural</div>
+      <div class="nav-genre" onclick="go('27','Shounen')">Shounen</div>
+    </div>
+    <div class="nav-footer">AniMain &mdash; All rights to their owners.<br><strong>Made by trentyn</strong></div>
+  </nav>
+
+  <div class="page">
+    <div class="topbar">
+      <a href="index.html" class="topbar-brand">AniMain</a>
+      <form class="search-form" id="search-form">
+        <input type="text" id="search-input" placeholder="Search anime..." autocomplete="off">
+        <button type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <div class="search-page">
+      <div id="search-head" class="search-head"></div>
+      <div class="grid" id="results-grid"></div>
+      <div id="pagination" style="text-align:center;margin-top:2rem;display:none">
+        <button id="load-more" class="btn-more">Load more</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>function go(id,name){location.href='search.html?genre='+id+'&name='+encodeURIComponent(name);}</script>
+<script type="module">
+import { searchAnime, getTopAnime, getTopAiring, getPopular, getUpcoming, getAnimeByGenre, getSeasonNow } from './js/api.js';
+
+const params  = new URLSearchParams(location.search);
+const query   = params.get('q');
+const filter  = params.get('filter');
+const genreId = params.get('genre');
+const genreName = params.get('name');
+let page = 1, hasMore = false;
+
+const head  = document.getElementById('search-head');
+const grid  = document.getElementById('results-grid');
+const pag   = document.getElementById('pagination');
+const more  = document.getElementById('load-more');
+
+// Mark active nav link
+document.querySelectorAll('.nav-link').forEach(l => {
+  if (l.getAttribute('href') === location.pathname + location.search) l.classList.add('active');
+});
+
+function esc(s=''){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function card(a) {
+  const img = a.images?.jpg?.large_image_url || a.images?.jpg?.image_url;
+  const title = a.title_english || a.title;
+  const score = a.score ? `${a.score}` : '';
+  const eps = a.episodes ? `${a.episodes} ep` : a.status==='Currently Airing' ? 'Ongoing' : '';
+  return `<div class="card" onclick="location.href='anime.html?id=${a.mal_id}'">
+    <div class="card-thumb">
+      ${img?`<img class="card-img" src="${img}" alt="${esc(title)}" loading="lazy">`
+           :`<div class="card-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>`}
+    </div>
+    <div class="card-body">
+      <div class="card-title">${esc(title)}</div>
+      <div class="card-meta">${[score?`★ ${score}`:'',eps].filter(Boolean).join(' · ')}</div>
+      ${a.status==='Currently Airing'?'<span class="card-tag">AIRING</span>':''}
+    </div>
+  </div>`;
+}
+
+function skels(n){return Array(n).fill('<div class="skeleton"></div>').join('');}
+
+async function load(append=false) {
+  if (!append) grid.innerHTML = skels(12);
+  else more.textContent = 'Loading...';
+  try {
+    let items=[];
+    if (query) {
+      const d=await searchAnime(query,page); items=d.data; hasMore=d.pagination?.has_next_page;
+      head.innerHTML=`Results for <span>"${esc(query)}"</span> &mdash; ${d.pagination?.items?.total||0} found`;
+    } else if (genreId) {
+      items=await getAnimeByGenre(genreId,page); hasMore=items.length===18;
+      head.innerHTML=`Genre: <span>${esc(genreName||genreId)}</span>`;
+    } else if (filter==='top')     { items=await getTopAnime();  head.innerHTML=`<span>Top Rated</span>`; }
+    else if (filter==='airing')    { items=await getTopAiring(); head.innerHTML=`<span>Currently Airing</span>`; }
+    else if (filter==='popular')   { items=await getPopular();   head.innerHTML=`<span>Most Popular</span>`; }
+    else if (filter==='upcoming')  { items=await getUpcoming();  head.innerHTML=`<span>Upcoming</span>`; }
+    else if (filter==='season')    { items=await getSeasonNow(); head.innerHTML=`<span>This Season</span>`; }
+    else { items=await getPopular(); head.innerHTML='Browse'; }
+
+    const html = items.length ? items.map(card).join('')
+      : `<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>No results found</p></div>`;
+    append ? grid.insertAdjacentHTML('beforeend',html) : (grid.innerHTML=html);
+    pag.style.display = hasMore ? 'block' : 'none';
+    more.textContent = 'Load more';
+  } catch(e) {
+    grid.innerHTML=`<p style="color:var(--t3);grid-column:1/-1;padding:2rem">Error loading. Try again.</p>`;
+  }
+}
+
+more.addEventListener('click',()=>{page++;load(true);});
+if (query) document.getElementById('search-input').value=query;
+document.getElementById('search-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const q=document.getElementById('search-input').value.trim();
+  if(q) location.href=`search.html?q=${encodeURIComponent(q)}`;
+});
+load();
+</script>
+</body>
+</html>

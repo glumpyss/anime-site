@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch — AniMain</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23f5c518'/><text x='50' y='72' font-size='60' text-anchor='middle' font-family='system-ui' font-weight='900' fill='black'>A</text></svg>">
+</head>
+<body>
+<div class="app">
+
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-brand-name">AniMain</div>
+      <div class="nav-brand-sub">v2.0 — Free Streaming</div>
+    </div>
+    <div class="nav-section-label">Menu</div>
+    <a href="index.html" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>Home</a>
+    <a href="search.html?filter=airing" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/></svg>Airing Now</a>
+    <a href="search.html?filter=top" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>Top Rated</a>
+    <a href="search.html?filter=popular" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Popular</a>
+    <a href="search.html?filter=upcoming" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Upcoming</a>
+    <div class="nav-section-label">Genres</div>
+    <div class="nav-genre-grid">
+      <div class="nav-genre" onclick="go('1','Action')">Action</div>
+      <div class="nav-genre" onclick="go('2','Adventure')">Adventure</div>
+      <div class="nav-genre" onclick="go('4','Comedy')">Comedy</div>
+      <div class="nav-genre" onclick="go('8','Drama')">Drama</div>
+      <div class="nav-genre" onclick="go('10','Fantasy')">Fantasy</div>
+      <div class="nav-genre" onclick="go('14','Horror')">Horror</div>
+      <div class="nav-genre" onclick="go('7','Mystery')">Mystery</div>
+      <div class="nav-genre" onclick="go('22','Romance')">Romance</div>
+      <div class="nav-genre" onclick="go('24','Sci-Fi')">Sci-Fi</div>
+      <div class="nav-genre" onclick="go('36','Slice of Life')">Slice of Life</div>
+      <div class="nav-genre" onclick="go('37','Supernatural')">Supernatural</div>
+      <div class="nav-genre" onclick="go('27','Shounen')">Shounen</div>
+    </div>
+    <div class="nav-footer">AniMain &mdash; All rights to their owners.<br><strong>Made by trentyn</strong></div>
+  </nav>
+
+  <div class="page">
+    <div class="topbar">
+      <a href="index.html" class="topbar-brand">AniMain</a>
+      <form class="search-form" id="search-form">
+        <input type="text" id="search-input" placeholder="Search anime..." autocomplete="off">
+        <button type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <div id="page-content">
+      <div class="spinner-wrap"><div class="spinner"></div><p>Loading...</p></div>
+    </div>
+  </div>
+
+</div>
+
+<script>function go(id,name){location.href='search.html?genre='+id+'&name='+encodeURIComponent(name);}</script>
+<script type="module">
+import { getAnimeById, getAnimeEpisodes } from './js/api.js';
+import { renderPlayer, renderServerTabs, updatePlayer } from './js/player.js';
+
+const params = new URLSearchParams(location.search);
+const id = params.get('id');
+const content = document.getElementById('page-content');
+
+function esc(s=''){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+if (!id) {
+  content.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>No anime ID provided</p></div>`;
+} else { init(id); }
+
+async function init(malId) {
+  try {
+    const anime = await getAnimeById(malId);
+    const epsData = await getAnimeEpisodes(malId, 1);
+
+    document.title = `${anime.title_english || anime.title} — AniMain`;
+
+    const title = anime.title_english || anime.title;
+    const img = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url;
+    const totalEps = anime.episodes || epsData?.pagination?.items?.total || '?';
+    const eps = epsData?.data || [];
+
+    let epNums = eps.map(e => e.mal_id);
+    if (!epNums.length && typeof anime.episodes === 'number')
+      epNums = Array.from({length: anime.episodes}, (_,i) => i+1);
+    if (!epNums.length) epNums = [1];
+
+    let curEp = parseInt(params.get('ep')) || epNums[0];
+
+    content.innerHTML = `
+      <div class="watch">
+
+        <!-- LEFT -->
+        <div>
+          <div class="player" id="player"></div>
+          <div id="server-container"></div>
+
+          <div class="ep-box" style="margin-top:0.75rem">
+            <div class="ep-box-head">
+              Episodes
+              <span>${totalEps !== '?' ? totalEps + ' total' : ''}
+              ${epsData?.pagination?.has_next_page
+                ? `<button id="load-more-eps" style="background:none;border:none;color:var(--y);cursor:pointer;font-size:0.75rem;font-family:inherit;margin-left:0.5rem">Load more</button>`
+                : ''}</span>
+            </div>
+            <div class="ep-grid" id="ep-grid">
+              ${epNums.map(n=>`<button class="ep-btn${n===curEp?' active':''}" data-ep="${n}">${n}</button>`).join('')}
+            </div>
+          </div>
+
+          <div class="anime-panel">
+            ${img?`<img class="anime-poster" src="${img}" alt="${esc(title)}">`:''}
+            <div>
+              <div class="anime-title">${esc(title)}</div>
+              ${anime.title!==title?`<div style="color:var(--t3);font-size:0.8rem;margin-bottom:0.5rem">${esc(anime.title)}</div>`:''}
+              <div class="anime-tags">
+                ${anime.score?`<span class="atag score">★ ${anime.score}</span>`:''}
+                ${anime.status?`<span class="atag">${esc(anime.status)}</span>`:''}
+                ${anime.year?`<span class="atag">${anime.year}</span>`:''}
+                ${anime.episodes?`<span class="atag">${anime.episodes} eps</span>`:''}
+              </div>
+              ${anime.genres?.length?`<div class="anime-genres">${anime.genres.map(g=>`<a href="search.html?genre=${g.mal_id}&name=${encodeURIComponent(g.name)}" class="genre-pill">${esc(g.name)}</a>`).join('')}</div>`:''}
+              <p class="anime-synopsis">${esc(anime.synopsis||'No synopsis available.')}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="watch-side">
+          <div class="side-box">
+            <div class="side-box-head">Episodes</div>
+            <div class="ep-grid" style="max-height:280px;overflow-y:auto;padding:0.6rem" id="ep-grid-side">
+              ${epNums.slice(0,100).map(n=>`<button class="ep-btn${n===curEp?' active':''}" data-ep="${n}">${n}</button>`).join('')}
+            </div>
+          </div>
+
+          ${anime.related?.length?`
+            <div class="side-box">
+              <div class="side-box-head">Related</div>
+              ${anime.related.slice(0,8).map(r=>`
+                <a href="${r.entry?.[0]?.type==='anime'?'anime.html?id='+r.entry[0].mal_id:'#'}" class="related-item">
+                  <span>${esc(r.entry?.[0]?.name||'')}</span>
+                  <span class="related-rel">${esc(r.relation)}</span>
+                </a>`).join('')}
+            </div>` : ''}
+        </div>
+
+      </div>
+    `;
+
+    renderPlayer(document.getElementById('player'), anime, curEp);
+    renderServerTabs(document.getElementById('server-container'), anime, curEp);
+
+    document.querySelectorAll('.ep-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        curEp = parseInt(btn.dataset.ep);
+        document.querySelectorAll('.ep-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll(`[data-ep="${curEp}"]`).forEach(b=>b.classList.add('active'));
+        updatePlayer(anime, curEp);
+        renderServerTabs(document.getElementById('server-container'), anime, curEp);
+        const u = new URL(location.href);
+        u.searchParams.set('ep', curEp);
+        history.replaceState(null,'',u);
+        document.getElementById('player')?.scrollIntoView({behavior:'smooth',block:'start'});
+      });
+    });
+
+    document.getElementById('load-more-eps')?.addEventListener('click', async () => {
+      const more = await getAnimeEpisodes(malId, 2);
+      const nums = more?.data?.map(e=>e.mal_id)||[];
+      const g = document.getElementById('ep-grid');
+      nums.forEach(n => {
+        const b = document.createElement('button');
+        b.className='ep-btn'; b.dataset.ep=n; b.textContent=n;
+        b.addEventListener('click',()=>{
+          curEp=n;
+          document.querySelectorAll('.ep-btn').forEach(x=>x.classList.remove('active'));
+          b.classList.add('active');
+          updatePlayer(anime,n);
+          renderServerTabs(document.getElementById('server-container'),anime,n);
+        });
+        g.appendChild(b);
+      });
+      document.getElementById('load-more-eps')?.remove();
+    });
+
+  } catch(err) {
+    content.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><p>Failed to load anime. Try again.</p></div>`;
+    console.error(err);
+  }
+}
+
+document.getElementById('search-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const q=document.getElementById('search-input').value.trim();
+  if(q) location.href=`search.html?q=${encodeURIComponent(q)}`;
+});
+</script>
+</body>
+</html>
