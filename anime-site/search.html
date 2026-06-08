@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search — AniMain</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎌</text></svg>">
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo">🎌 AniMain</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="search.html?filter=top">Top Anime</a>
+    <a href="search.html?filter=airing">Airing</a>
+    <a href="search.html?filter=upcoming">Upcoming</a>
+  </div>
+  <form class="search-bar" id="search-form">
+    <input type="text" id="search-input" placeholder="Search anime..." autocomplete="off">
+    <button type="submit">🔍</button>
+  </form>
+</nav>
+
+<div class="search-page">
+  <div id="search-heading" class="search-heading"></div>
+  <div class="anime-grid" id="results-grid"></div>
+  <div id="pagination" style="text-align:center;margin-top:2rem;display:none">
+    <button id="load-more" class="load-more-btn">Load More</button>
+  </div>
+</div>
+
+<footer>
+  <p>🎌 AniMain &mdash; All content belongs to their respective owners.</p>
+  <p class="made-by">Made by trentyn</p>
+</footer>
+
+<script type="module">
+import { searchAnime, getTopAnime, getTopAiring, getPopular, getUpcoming, getAnimeByGenre, getSeasonNow } from './js/api.js';
+
+const params = new URLSearchParams(location.search);
+const query = params.get('q');
+const filter = params.get('filter');
+const genreId = params.get('genre');
+const genreName = params.get('name');
+
+let currentPage = 1;
+let currentQuery = query;
+let hasMore = false;
+
+const heading = document.getElementById('search-heading');
+const grid = document.getElementById('results-grid');
+const pagination = document.getElementById('pagination');
+const loadMoreBtn = document.getElementById('load-more');
+
+function escapeHtml(str = '') {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function cardHTML(anime) {
+  const img = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url;
+  const title = anime.title_english || anime.title;
+  const score = anime.score ? `⭐ ${anime.score}` : '';
+  const eps = anime.episodes ? `${anime.episodes} eps` : anime.status === 'Currently Airing' ? 'Ongoing' : '';
+  return `
+    <div class="anime-card" onclick="location.href='anime.html?id=${anime.mal_id}'">
+      <div class="card-img-wrap">
+        ${img ? `<img class="card-img" src="${img}" alt="${escapeHtml(title)}" loading="lazy">` : `<div class="card-img-placeholder">🎌</div>`}
+      </div>
+      <div class="card-info">
+        <div class="card-title">${escapeHtml(title)}</div>
+        <div class="card-meta">${[score, eps].filter(Boolean).join(' · ')}</div>
+        ${anime.status === 'Currently Airing' ? '<span class="card-badge">AIRING</span>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+function skeletons(n) {
+  return Array(n).fill('<div class="skeleton"></div>').join('');
+}
+
+async function load(append = false) {
+  if (!append) grid.innerHTML = skeletons(12);
+  else loadMoreBtn.textContent = 'Loading...';
+
+  try {
+    let items = [];
+
+    if (query) {
+      const data = await searchAnime(query, currentPage);
+      items = data.data;
+      hasMore = data.pagination?.has_next_page;
+      heading.innerHTML = `Results for <span>"${escapeHtml(query)}"</span> — ${data.pagination?.items?.total || 0} found`;
+    } else if (genreId) {
+      items = await getAnimeByGenre(genreId, currentPage);
+      heading.innerHTML = `Genre: <span>${escapeHtml(genreName || genreId)}</span>`;
+      hasMore = items.length === 18;
+    } else if (filter === 'top') {
+      items = await getTopAnime();
+      heading.innerHTML = `<span>Top Rated</span> Anime`;
+      hasMore = false;
+    } else if (filter === 'airing') {
+      items = await getTopAiring();
+      heading.innerHTML = `<span>Currently Airing</span>`;
+      hasMore = false;
+    } else if (filter === 'popular') {
+      items = await getPopular();
+      heading.innerHTML = `<span>Most Popular</span>`;
+      hasMore = false;
+    } else if (filter === 'upcoming') {
+      items = await getUpcoming();
+      heading.innerHTML = `<span>Upcoming</span> Anime`;
+      hasMore = false;
+    } else if (filter === 'season') {
+      items = await getSeasonNow();
+      heading.innerHTML = `<span>This Season</span>`;
+      hasMore = false;
+    } else {
+      heading.innerHTML = 'Browse Anime';
+      items = await getPopular();
+    }
+
+    const html = items.length
+      ? items.map(cardHTML).join('')
+      : `<div class="no-results" style="grid-column:1/-1"><div class="icon">😔</div><p>No results found.</p></div>`;
+
+    if (append) {
+      grid.insertAdjacentHTML('beforeend', html);
+    } else {
+      grid.innerHTML = html;
+    }
+
+    pagination.style.display = hasMore ? 'block' : 'none';
+    loadMoreBtn.textContent = 'Load More';
+  } catch (e) {
+    grid.innerHTML = `<p style="color:var(--muted);grid-column:1/-1">Error loading results.</p>`;
+  }
+}
+
+loadMoreBtn.addEventListener('click', () => {
+  currentPage++;
+  load(true);
+});
+
+// Search from nav
+const form = document.getElementById('search-form');
+const input = document.getElementById('search-input');
+if (query) input.value = query;
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (q) location.href = `search.html?q=${encodeURIComponent(q)}`;
+});
+
+load();
+</script>
+</body>
+</html>
