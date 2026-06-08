@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch — AniMain</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎌</text></svg>">
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo">🎌 AniMain</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="search.html?filter=top">Top Anime</a>
+    <a href="search.html?filter=airing">Airing</a>
+    <a href="search.html?filter=upcoming">Upcoming</a>
+  </div>
+  <form class="search-bar" id="search-form">
+    <input type="text" id="search-input" placeholder="Search anime..." autocomplete="off">
+    <button type="submit">🔍</button>
+  </form>
+</nav>
+
+<div id="page-content">
+  <div class="loading-center"><div class="spinner"></div></div>
+</div>
+
+<footer>
+  <p>🎌 AniMain &mdash; All content belongs to their respective owners.</p>
+  <p class="made-by">Made by trentyn</p>
+</footer>
+
+<script type="module">
+import { getAnimeById, getAnimeEpisodes } from './js/api.js';
+import { renderPlayer, renderServerTabs, updatePlayer } from './js/player.js';
+
+const params = new URLSearchParams(location.search);
+const id = params.get('id');
+const page = document.getElementById('page-content');
+
+function escapeHtml(str = '') {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+if (!id) {
+  page.innerHTML = `<div class="no-results"><div class="icon">❓</div><p>No anime ID provided.</p></div>`;
+} else {
+  init(id);
+}
+
+async function init(malId) {
+  try {
+    // Sequential to avoid Jikan rate limit (3 req/sec)
+    const anime = await getAnimeById(malId);
+    const epsData = await getAnimeEpisodes(malId, 1);
+
+    document.title = `${anime.title_english || anime.title} — AniMain`;
+
+    const title = anime.title_english || anime.title;
+    const img = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url;
+    const totalEps = anime.episodes || epsData?.pagination?.items?.total || '?';
+    const eps = epsData?.data || [];
+
+    let epNums = eps.map(e => e.mal_id);
+    if (epNums.length === 0 && typeof anime.episodes === 'number') {
+      epNums = Array.from({ length: anime.episodes }, (_, i) => i + 1);
+    }
+    if (epNums.length === 0) epNums = [1];
+
+    let currentEp = parseInt(params.get('ep')) || epNums[0];
+
+    page.innerHTML = `
+      <div class="watch-container">
+        <div>
+          <div class="player-wrap" id="player-wrap"></div>
+          <div id="server-container"></div>
+
+          <div style="margin-top:1rem">
+            <div style="font-weight:600;margin-bottom:0.6rem">Episodes</div>
+            <div class="ep-list-wrap">
+              <div class="ep-list-header">
+                ${totalEps !== '?' ? `Total: ${totalEps} episodes` : 'Episodes'}
+                ${epsData?.pagination?.has_next_page
+                  ? `<span id="load-more-eps" style="color:var(--p1);cursor:pointer;font-size:0.8rem;float:right">Load More ↓</span>`
+                  : ''}
+              </div>
+              <div class="ep-grid" id="ep-grid">
+                ${epNums.map(n => `
+                  <button class="ep-btn ${n === currentEp ? 'active' : ''}" data-ep="${n}">${n}</button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="anime-detail" style="margin-top:1.5rem">
+            ${img ? `<img class="detail-poster" src="${img}" alt="${escapeHtml(title)}">` : ''}
+            <div>
+              <div class="detail-title">${escapeHtml(title)}</div>
+              ${anime.title !== title ? `<div style="color:var(--muted);font-size:0.85rem;margin-bottom:0.5rem">${escapeHtml(anime.title)}</div>` : ''}
+              <div class="detail-meta">
+                ${anime.score ? `<span class="meta-badge score">⭐ ${anime.score}</span>` : ''}
+                ${anime.status ? `<span class="meta-badge status-airing">${escapeHtml(anime.status)}</span>` : ''}
+                ${anime.year ? `<span class="meta-badge">${anime.year}</span>` : ''}
+                ${anime.episodes ? `<span class="meta-badge">${anime.episodes} eps</span>` : ''}
+                ${anime.duration ? `<span class="meta-badge">${escapeHtml(anime.duration)}</span>` : ''}
+              </div>
+              ${anime.genres?.length ? `
+                <div style="margin-bottom:0.8rem;display:flex;gap:0.4rem;flex-wrap:wrap">
+                  ${anime.genres.map(g =>
+                    `<a href="search.html?genre=${g.mal_id}&name=${encodeURIComponent(g.name)}" class="genre-chip" style="font-size:0.75rem">${escapeHtml(g.name)}</a>`
+                  ).join('')}
+                </div>
+              ` : ''}
+              <p class="detail-synopsis">${escapeHtml(anime.synopsis || 'No synopsis available.')}</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="ep-list-wrap">
+            <div class="ep-list-header">Quick Episodes</div>
+            <div class="ep-grid" id="ep-grid-side">
+              ${epNums.slice(0, 50).map(n => `
+                <button class="ep-btn ${n === currentEp ? 'active' : ''}" data-ep="${n}">${n}</button>
+              `).join('')}
+            </div>
+          </div>
+
+          ${anime.related?.length ? `
+            <div style="margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+              <div class="ep-list-header">Related Anime</div>
+              <div style="padding:0.8rem;display:flex;flex-direction:column;gap:0.5rem">
+                ${anime.related.slice(0, 8).map(r => `
+                  <a href="${r.entry?.[0]?.type === 'anime' ? 'anime.html?id=' + r.entry[0].mal_id : '#'}"
+                     style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0.6rem;background:var(--surface2);border-radius:6px;font-size:0.82rem;color:var(--text)">
+                    <span>${escapeHtml(r.entry?.[0]?.name || '')}</span>
+                    <span style="color:var(--muted);font-size:0.75rem">${escapeHtml(r.relation)}</span>
+                  </a>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    // Initial render
+    renderPlayer(document.getElementById('player-wrap'), anime, currentEp);
+    renderServerTabs(document.getElementById('server-container'), anime, currentEp);
+
+    // Episode clicks
+    document.querySelectorAll('.ep-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentEp = parseInt(btn.dataset.ep);
+        document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll(`[data-ep="${currentEp}"]`).forEach(b => b.classList.add('active'));
+        updatePlayer(anime, currentEp);
+        // Re-render server tabs with new ep URLs
+        renderServerTabs(document.getElementById('server-container'), anime, currentEp);
+        const url = new URL(location.href);
+        url.searchParams.set('ep', currentEp);
+        history.replaceState(null, '', url);
+        document.getElementById('player-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Load more episodes
+    document.getElementById('load-more-eps')?.addEventListener('click', async () => {
+      const moreEps = await getAnimeEpisodes(malId, 2);
+      const moreNums = moreEps?.data?.map(e => e.mal_id) || [];
+      const epGrid = document.getElementById('ep-grid');
+      moreNums.forEach(n => {
+        const btn = document.createElement('button');
+        btn.className = 'ep-btn';
+        btn.dataset.ep = n;
+        btn.textContent = n;
+        btn.addEventListener('click', () => {
+          currentEp = n;
+          document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updatePlayer(anime, currentEp);
+          renderServerTabs(document.getElementById('server-container'), anime, currentEp);
+        });
+        epGrid.appendChild(btn);
+      });
+      document.getElementById('load-more-eps')?.remove();
+    });
+
+  } catch (err) {
+    page.innerHTML = `<div class="no-results"><div class="icon">❌</div><p>Failed to load anime. Try again.</p></div>`;
+    console.error(err);
+  }
+}
+
+// Nav search
+document.getElementById('search-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = document.getElementById('search-input').value.trim();
+  if (q) location.href = `search.html?q=${encodeURIComponent(q)}`;
+});
+</script>
+</body>
+</html>
